@@ -1,108 +1,203 @@
 package com.example.yisen614.photogallery;
 
-import android.content.Context;
-import android.net.Uri;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
-/**
- * A simple {@link Fragment} subclass.
- * Activities that contain this fragment must implement the
- * {@link PhotoGalleryFragment.OnFragmentInteractionListener} interface
- * to handle interaction events.
- * Use the {@link PhotoGalleryFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.zip.Inflater;
+
+import static android.support.constraint.Constraints.TAG;
+
 public class PhotoGalleryFragment extends Fragment {
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
 
-    // TODO: Rename and change types of parameters
-    private String mParam1;
-    private String mParam2;
+    private RecyclerView mRecyclerView;
 
-    private OnFragmentInteractionListener mListener;
+    private List<Image> mItems = new ArrayList<>();
+
+    private Downloader<PhotoHolder> downloader;
 
     public PhotoGalleryFragment() {
-        // Required empty public constructor
     }
 
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @param param1 Parameter 1.
-     * @param param2 Parameter 2.
-     * @return A new instance of fragment PhotoGalleryFragment.
-     */
-    // TODO: Rename and change types and number of parameters
-    public static PhotoGalleryFragment newInstance(String param1, String param2) {
-        PhotoGalleryFragment fragment = new PhotoGalleryFragment();
-        Bundle args = new Bundle();
-        args.putString(ARG_PARAM1, param1);
-        args.putString(ARG_PARAM2, param2);
-        fragment.setArguments(args);
-        return fragment;
+
+    public static PhotoGalleryFragment newInstance() {
+        return new PhotoGalleryFragment();
     }
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if (getArguments() != null) {
-            mParam1 = getArguments().getString(ARG_PARAM1);
-            mParam2 = getArguments().getString(ARG_PARAM2);
-        }
+        setRetainInstance(true);
+        new FetchItemsTask().execute();
+        Handler responseHandler = new Handler();
+
+        downloader = new Downloader<>(responseHandler);
+        downloader.setDownloadListener(new Downloader.DownloadListener<PhotoHolder>() {
+            @Override
+            public void onDownloaded(PhotoHolder target, Bitmap bitmap) {
+                Drawable drawable = new BitmapDrawable(getResources(), bitmap);
+                target.bindDrawable(drawable);
+            }
+        });
+        downloader.start();
+        downloader.getLooper();
+        Log.i("Downloader: ", "background work start");
+    }
+
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        downloader.clearQueue();
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        return inflater.inflate(R.layout.fragment_photo_gallery, container, false);
+    public void onDestroy() {
+        super.onDestroy();
+        downloader.quit();
+        Log.i("Downloader: ", "background work destroy");
     }
 
-    // TODO: Rename method, update argument and hook method into UI event
-    public void onButtonPressed(Uri uri) {
-        if (mListener != null) {
-            mListener.onFragmentInteraction(uri);
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_photo_gallery, container, false);
+        mRecyclerView = view.findViewById(R.id.recycler_view);
+        mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 2));
+        return view;
+    }
+
+
+    private void setupAdapter() {
+        if (isAdded()) {
+            mRecyclerView.setAdapter(new PhotoAdapter(mItems));
         }
     }
 
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        if (context instanceof OnFragmentInteractionListener) {
-            mListener = (OnFragmentInteractionListener) context;
-        } else {
-            throw new RuntimeException(context.toString()
-                    + " must implement OnFragmentInteractionListener");
+    private class PhotoAdapter extends RecyclerView.Adapter<PhotoHolder>{
+
+        private List<Image> items;
+
+        public PhotoAdapter(List<Image> items) {
+            this.items = items;
+        }
+
+        @NonNull
+        @Override
+        public PhotoHolder onCreateViewHolder(@NonNull ViewGroup viewGroup, int i) {
+            View v = LayoutInflater.from(viewGroup.getContext())
+                    .inflate(R.layout.recycler_view_item, viewGroup, false);
+            return new PhotoHolder(v);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull PhotoHolder photoHolder, int i) {
+            Image item = items.get(i);
+            Drawable placeholder = getResources().getDrawable(R.drawable.placeholder_image);
+            photoHolder.bindDrawable(placeholder);
+            downloader.queueDownload(photoHolder, item.getPic_url());
+            photoHolder.bindGalleryItem(item);
+        }
+
+        @Override
+        public int getItemCount() {
+            return items.size();
         }
     }
 
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        mListener = null;
+
+    public class PhotoHolder extends RecyclerView.ViewHolder {
+
+        private ImageView imageView;
+
+        private TextView desView;
+
+        public PhotoHolder(@NonNull View itemView) {
+            super(itemView);
+            imageView = itemView.findViewById(R.id.image_view);
+            desView = itemView.findViewById(R.id.des_view);
+        }
+
+        public void bindGalleryItem(Image item) {
+            desView.setText(item.getPic_url());
+        }
+
+        public void bindDrawable(Drawable drawable) {
+            imageView.setImageDrawable(drawable);
+        }
     }
 
-    /**
-     * This interface must be implemented by activities that contain this
-     * fragment to allow an interaction in this fragment to be communicated
-     * to the activity and potentially other fragments contained in that
-     * activity.
-     * <p>
-     * See the Android Training lesson <a href=
-     * "http://developer.android.com/training/basics/fragments/communicating.html"
-     * >Communicating with Other Fragments</a> for more information.
-     */
-    public interface OnFragmentInteractionListener {
-        // TODO: Update argument type and name
-        void onFragmentInteraction(Uri uri);
+    private class FetchItemsTask extends AsyncTask<String, Integer, List<Image>> {
+
+        List<Image> items = new ArrayList<>();
+
+        private String jsonString;
+
+        @Override
+        protected List<Image> doInBackground(String... params) {
+            try {
+                jsonString = new FlickrFetchr().getUrlString("https://pic.sogou.com/pics/channel/getAllRecomPicByTag.jsp?category=%E7%BE%8E%E5%A5%B3&tag=%E6%96%87%E8%89%BA&start=0&len=100");
+                Log.i(TAG, "Fetched contents of URL: " + jsonString);
+            } catch (IOException ioe) {
+                Log.e(TAG, "Failed to fetch URL: ", ioe);
+            }
+            return fetchItems();
+        }
+
+        @Override
+        protected void onPostExecute(List<Image> items) {
+            mItems = items;
+            setupAdapter();
+        }
+
+
+        public List<Image> fetchItems() {
+            try {
+                Log.i(TAG, "Received JSON: " + jsonString);
+                JSONObject jsonBody = new JSONObject(jsonString);
+                parseItems(items, jsonBody);
+            } catch (JSONException je) {
+                Log.e(TAG, "Failed to parse JSON", je);
+            }
+            return items;
+        }
+
+        private void parseItems(List<Image> items, JSONObject jsonBody) throws JSONException {
+
+            JSONArray photoJsonArray = jsonBody.getJSONArray("all_items");
+
+            for (int i = 0; i < photoJsonArray.length(); i++) {
+                JSONObject photoJsonObject = photoJsonArray.getJSONObject(i);
+                Image item = new Image();
+                item.setId(photoJsonObject.getInt("id"));
+                item.setTitle(photoJsonObject.getString("title"));
+                item.setPic_url(photoJsonObject.getString("pic_url"));
+                item.setPage_url(photoJsonObject.getString("page_url"));
+                items.add(item);
+                Log.i("Image", item.toString());
+            }
+        }
     }
 }
