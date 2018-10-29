@@ -1,11 +1,7 @@
 package com.example.yisen614.photogallery;
 
-import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -15,9 +11,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
+
+import com.facebook.drawee.view.SimpleDraweeView;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -26,7 +22,6 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.Inflater;
 
 import static android.support.constraint.Constraints.TAG;
 
@@ -35,8 +30,6 @@ public class PhotoGalleryFragment extends Fragment {
     private RecyclerView mRecyclerView;
 
     private List<Image> mItems = new ArrayList<>();
-
-    private Downloader<PhotoHolder> downloader;
 
     public PhotoGalleryFragment() {
     }
@@ -51,21 +44,17 @@ public class PhotoGalleryFragment extends Fragment {
         super.onCreate(savedInstanceState);
         setRetainInstance(true);
         new FetchItemsTask().execute();
-        Handler responseHandler = new Handler();
     }
 
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        downloader.clearQueue();
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        downloader.quit();
-        Log.i("Downloader: ", "background work destroy");
     }
 
     @Nullable
@@ -84,11 +73,11 @@ public class PhotoGalleryFragment extends Fragment {
         }
     }
 
-    private class PhotoAdapter extends RecyclerView.Adapter<PhotoHolder>{
+    private class PhotoAdapter extends RecyclerView.Adapter<PhotoHolder> {
 
         private List<Image> items;
 
-        public PhotoAdapter(List<Image> items) {
+        PhotoAdapter(List<Image> items) {
             this.items = items;
         }
 
@@ -103,9 +92,6 @@ public class PhotoGalleryFragment extends Fragment {
         @Override
         public void onBindViewHolder(@NonNull PhotoHolder photoHolder, int i) {
             Image item = items.get(i);
-            Drawable placeholder = getResources().getDrawable(R.drawable.placeholder_image);
-            photoHolder.bindDrawable(placeholder);
-            downloader.queueDownload(photoHolder, item.getPic_url());
             photoHolder.bindGalleryItem(item);
         }
 
@@ -116,35 +102,35 @@ public class PhotoGalleryFragment extends Fragment {
     }
 
 
-    public class PhotoHolder extends RecyclerView.ViewHolder {
+    class PhotoHolder extends RecyclerView.ViewHolder {
 
-        private ImageView imageView;
+        private SimpleDraweeView imageView;
 
         private TextView desView;
 
-        public PhotoHolder(@NonNull View itemView) {
+        PhotoHolder(@NonNull View itemView) {
             super(itemView);
             imageView = itemView.findViewById(R.id.image_view);
             desView = itemView.findViewById(R.id.des_view);
         }
 
-        public void bindGalleryItem(Image item) {
+        void bindGalleryItem(Image item) {
+            imageView.setImageURI(item.getPic_url());
             desView.setText(item.getPic_url());
-        }
-
-        public void bindDrawable(Drawable drawable) {
-            imageView.setImageDrawable(drawable);
         }
     }
 
-    private class FetchItemsTask extends AsyncTask<String, Integer, List<Image>> {
+    private class FetchItemsTask extends AsyncTask<Integer, Integer, List<Image>> {
+
+        private Integer count = 0;
 
         List<Image> items = new ArrayList<>();
 
         private String jsonString;
 
         @Override
-        protected List<Image> doInBackground(String... params) {
+        protected List<Image> doInBackground(Integer... params) {
+            count = params[0];
             try {
                 jsonString = new FlickrFetchr().getUrlString("https://pic.sogou.com/pics/channel/getAllRecomPicByTag.jsp?category=%E7%BE%8E%E5%A5%B3&tag=%E6%96%87%E8%89%BA&start=0&len=100");
                 Log.i(TAG, "Fetched contents of URL: " + jsonString);
@@ -161,7 +147,7 @@ public class PhotoGalleryFragment extends Fragment {
         }
 
 
-        public List<Image> fetchItems() {
+        List<Image> fetchItems() {
             try {
                 Log.i(TAG, "Received JSON: " + jsonString);
                 JSONObject jsonBody = new JSONObject(jsonString);
