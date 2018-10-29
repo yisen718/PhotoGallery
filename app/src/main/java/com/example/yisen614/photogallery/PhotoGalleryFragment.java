@@ -52,18 +52,6 @@ public class PhotoGalleryFragment extends Fragment {
         setRetainInstance(true);
         new FetchItemsTask().execute();
         Handler responseHandler = new Handler();
-
-        downloader = new Downloader<>(responseHandler);
-        downloader.setDownloadListener(new Downloader.DownloadListener<PhotoHolder>() {
-            @Override
-            public void onDownloaded(PhotoHolder target, Bitmap bitmap) {
-                Drawable drawable = new BitmapDrawable(getResources(), bitmap);
-                target.bindDrawable(drawable);
-            }
-        });
-        downloader.start();
-        downloader.getLooper();
-        Log.i("Downloader: ", "background work start");
     }
 
 
