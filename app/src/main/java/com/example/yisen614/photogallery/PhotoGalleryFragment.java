@@ -1,14 +1,17 @@
 package com.example.yisen614.photogallery;
 
+import android.annotation.SuppressLint;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
-import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.CardView;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -23,6 +26,11 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 import static android.support.constraint.Constraints.TAG;
 
@@ -57,12 +65,13 @@ public class PhotoGalleryFragment extends Fragment {
         super.onDestroy();
     }
 
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_photo_gallery, container, false);
         mRecyclerView = view.findViewById(R.id.recycler_view);
-        mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 2));
+        mRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         return view;
     }
 
@@ -106,17 +115,57 @@ public class PhotoGalleryFragment extends Fragment {
 
         private ImageView imageView;
 
+        private CardView cardView;
+
         private TextView desView;
 
+        @SuppressLint("ClickableViewAccessibility")
         PhotoHolder(@NonNull View itemView) {
             super(itemView);
             imageView = itemView.findViewById(R.id.image_view);
             desView = itemView.findViewById(R.id.des_view);
+            cardView = itemView.findViewById(R.id.cards);
+
+            cardView.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            return handleOnTouchStart(event);
+                        case MotionEvent.ACTION_MOVE:
+                            return handleOnMove(event);
+                        case MotionEvent.ACTION_UP:
+                            return handleOnTouchEnd(event);
+                        default:
+                            return handleDefault(event);
+                    }
+                }
+            });
         }
 
         void bindGalleryItem(Image item) {
-            Glide.with(getActivity()).load(item.getPic_url()).into(imageView);
-            desView.setText(item.getPic_url());
+            Glide.with(Objects.requireNonNull(getActivity())).load(item.getPic_url()).into(imageView);
+            desView.setText(item.getTags());
+        }
+
+        private Boolean handleOnTouchStart(MotionEvent motionEvent) {
+            cardView.animate().scaleX(0.95f).scaleY(0.95f).translationZ(0F).setDuration(100);
+            return true;
+        }
+
+        private Boolean handleOnTouchEnd(MotionEvent motionEvent) {
+            cardView.animate().scaleX(1F).scaleY(1F).translationZ(20F).setDuration(200);
+            return true;
+        }
+
+        private Boolean handleOnMove(MotionEvent motionEvent) {
+            return true;
+        }
+
+        private Boolean handleDefault(MotionEvent motionEvent) {
+            cardView.animate().scaleX(0.95f).scaleY(0.95f).translationZ(0F).setDuration(100);
+            cardView.animate().scaleX(1F).scaleY(1F).translationZ(20F).setDuration(200);
+            return true;
         }
 
     }
@@ -130,7 +179,15 @@ public class PhotoGalleryFragment extends Fragment {
         @Override
         protected List<Image> doInBackground(String... params) {
             try {
-                jsonString = new FlickrFetchr().getUrlString("https://pic.sogou.com/pics/channel/getAllRecomPicByTag.jsp?category=%E7%BE%8E%E5%A5%B3&tag=%E6%96%87%E8%89%BA&start=0&len=100");
+                OkHttpClient client = new OkHttpClient();
+                Request request = new Request.Builder()
+                        .url("https://pic.sogou.com/pics/channel/getAllRecomPicByTag.jsp?category=%E7%BE%8E%E5%A5%B3&tag=%E6%96%87%E8%89%BA&start=0&len=1000")
+                        .build();
+
+                Response response = client.newCall(request).execute();
+
+                jsonString = response.body().string();
+
                 Log.i(TAG, "Fetched contents of URL: " + jsonString);
             } catch (IOException ioe) {
                 Log.e(TAG, "Failed to fetch URL: ", ioe);
@@ -143,7 +200,6 @@ public class PhotoGalleryFragment extends Fragment {
             mItems.addAll(items);
             setupAdapter();
         }
-
 
         List<Image> fetchItems() {
             try {
@@ -167,7 +223,10 @@ public class PhotoGalleryFragment extends Fragment {
                 item.setTitle(photoJsonObject.getString("title"));
                 item.setPic_url(photoJsonObject.getString("pic_url"));
                 item.setPage_url(photoJsonObject.getString("page_url"));
+                JSONArray array = photoJsonObject.getJSONArray("tags");
+                item.setTags(array.toString());
                 items.add(item);
+                Log.i("image:", item.getPic_url());
             }
         }
     }

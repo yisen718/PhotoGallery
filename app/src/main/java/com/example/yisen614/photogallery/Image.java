@@ -4,9 +4,27 @@ public class Image {
 
     private int id;
     private String pic_url;
+    private boolean loaded = false;
     private String page_url;
     private String title;
     private Object publish_time;
+    private String tags;
+
+    public boolean isLoaded() {
+        return loaded;
+    }
+
+    public void setLoaded(boolean loaded) {
+        this.loaded = loaded;
+    }
+
+    public String getTags() {
+        return tags;
+    }
+
+    public void setTags(String tags) {
+        this.tags = tags;
+    }
 
     public int getId() {
         return id;
