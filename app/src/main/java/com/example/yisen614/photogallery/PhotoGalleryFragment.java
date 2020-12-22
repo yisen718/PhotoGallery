@@ -15,9 +15,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.TextView;
 
-import com.bumptech.glide.Glide;
+import com.squareup.picasso.Callback;
+import com.squareup.picasso.Picasso;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -26,7 +26,6 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -117,14 +116,14 @@ public class PhotoGalleryFragment extends Fragment {
 
         private CardView cardView;
 
-        private TextView desView;
+        private BlurringView blurringView;
 
         @SuppressLint("ClickableViewAccessibility")
         PhotoHolder(@NonNull View itemView) {
             super(itemView);
             imageView = itemView.findViewById(R.id.image_view);
-            desView = itemView.findViewById(R.id.des_view);
             cardView = itemView.findViewById(R.id.cards);
+            blurringView = itemView.findViewById(R.id.blurring_view);
 
             cardView.setOnTouchListener(new View.OnTouchListener() {
                 @Override
@@ -144,8 +143,32 @@ public class PhotoGalleryFragment extends Fragment {
         }
 
         void bindGalleryItem(Image item) {
-            Glide.with(Objects.requireNonNull(getActivity())).load(item.getPic_url()).into(imageView);
-            desView.setText(item.getTags());
+//            Glide.with(Objects.requireNonNull(getActivity())).load(item.getPic_url()).listener(new RequestListener<Drawable>() {
+//                @Override
+//                public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Drawable> target, boolean isFirstResource) {
+//                    return false;
+//                }
+//
+//                @Override
+//                public boolean onResourceReady(Drawable resource, Object model, Target<Drawable> target, DataSource dataSource, boolean isFirstResource) {
+//                    blurringView.setBlurredView(imageView);
+//                    return false;
+//                }
+//            }).into(imageView);
+
+            Picasso.get()
+                    .load(item.getPic_url())
+                    .into(imageView, new Callback() {
+                        @Override
+                        public void onSuccess() {
+                            blurringView.setBlurredView(imageView);
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+
+                        }
+                    });
         }
 
         private Boolean handleOnTouchStart(MotionEvent motionEvent) {
